@@ -1,0 +1,28 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model Product {
+  id                Int                @id(map: "PK_bebc9158e480b949565b4dc7a82") @default(autoincrement())
+  name              String             @db.VarChar
+  sku               String             @db.VarChar
+  stock             Int
+  price             Decimal            @db.Decimal(12, 2)
+  stockDecreaseLogs StockDecreaseLog[]
+
+  @@map("product")
+}
+
+model StockDecreaseLog {
+  id        Int      @id(map: "PK_10acbe76858f8fb51f92678f633") @default(autoincrement())
+  orderId   Int
+  productId Int?
+  product   Product? @relation(fields: [productId], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "FK_f8fec98809b35f2122d9b8ee400")
+
+  @@map("stock_decrease_logs")
+}

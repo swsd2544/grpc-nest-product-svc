@@ -4,7 +4,7 @@ import {
   DecreaseStockRequestDto,
 } from './product.dto';
 import { ProductService } from './product.service';
-import { Controller, Inject } from '@nestjs/common';
+import { Controller } from '@nestjs/common';
 import {
   CreateProductResponse,
   DecreaseStockResponse,
@@ -15,8 +15,7 @@ import { GrpcMethod } from '@nestjs/microservices';
 
 @Controller()
 export class ProductController {
-  @Inject(ProductService)
-  private readonly service: ProductService;
+  constructor(private readonly service: ProductService) {}
 
   @GrpcMethod(PRODUCT_SERVICE_NAME, 'CreateProduct')
   private createProduct(

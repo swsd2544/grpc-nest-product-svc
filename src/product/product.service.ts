@@ -1,29 +1,25 @@
+import { PrismaService } from './prisma.service';
 import {
   FindOneRequestDto,
   CreateProductRequestDto,
   DecreaseStockRequestDto,
 } from './product.dto';
 import { HttpStatus, Injectable } from '@nestjs/common';
-import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
-import { Product } from './entity/product.entity';
-import { StockDecreaseLogs } from './entity/stock-decrease-log.entity';
 import {
   CreateProductResponse,
   DecreaseStockResponse,
   FindOneResponse,
 } from './product.pb';
+import { Product } from '@prisma/client';
 
 @Injectable()
 export class ProductService {
-  @InjectRepository(Product)
-  private readonly repository: Repository<Product>;
-
-  @InjectRepository(StockDecreaseLogs)
-  private readonly decreaseLogRepository: Repository<StockDecreaseLogs>;
+  constructor(private readonly prisma: PrismaService) {}
 
   public async findOne({ id }: FindOneRequestDto): Promise<FindOneResponse> {
-    const product: Product = await this.repository.findOne({ where: { id } });
+    const product: Product = await this.prisma.product.findUnique({
+      where: { id },
+    });
 
     if (!product) {
       return {
@@ -33,20 +29,19 @@ export class ProductService {
       };
     }
 
-    return { data: product, error: null, status: HttpStatus.OK };
+    return {
+      data: { ...product, price: Number(product.price) },
+      error: null,
+      status: HttpStatus.OK,
+    };
   }
 
   public async createProduct(
     payload: CreateProductRequestDto,
   ): Promise<CreateProductResponse> {
-    const product: Product = new Product();
-
-    product.name = payload.name;
-    product.sku = payload.sku;
-    product.stock = payload.stock;
-    product.price = payload.price;
-
-    await this.repository.save(product);
+    const product: Product = await this.prisma.product.create({
+      data: { ...payload },
+    });
 
     return { id: product.id, error: null, status: HttpStatus.OK };
   }
@@ -55,8 +50,8 @@ export class ProductService {
     id,
     orderId,
   }: DecreaseStockRequestDto): Promise<DecreaseStockResponse> {
-    const product: Product = await this.repository.findOne({
-      select: ['id', 'stock'],
+    const product = await this.prisma.product.findUnique({
+      select: { id: true, stock: true },
       where: { id },
     });
 
@@ -66,9 +61,11 @@ export class ProductService {
       return { error: ['Stock too low'], status: HttpStatus.CONFLICT };
     }
 
-    const isAlreadyDecreased: number = await this.decreaseLogRepository.count({
-      where: { orderId },
-    });
+    const isAlreadyDecreased: number = await this.prisma.stockDecreaseLog.count(
+      {
+        where: { orderId },
+      },
+    );
 
     if (isAlreadyDecreased) {
       // Idempotence
@@ -78,8 +75,13 @@ export class ProductService {
       };
     }
 
-    await this.repository.update(product.id, { stock: product.stock - 1 });
-    await this.decreaseLogRepository.insert({ product, orderId });
+    await this.prisma.product.update({
+      where: { id: product.id },
+      data: { stock: product.stock - 1 },
+    });
+    await this.prisma.stockDecreaseLog.create({
+      data: { orderId, productId: product.id },
+    });
 
     return { error: null, status: HttpStatus.OK };
   }
